@@ -1,12 +1,60 @@
 #!/bin/bash
 
+PROGNAME=`basename $0`
+VERSAO="1.0"
 
 
-for i in $(ibmcloud account list |  awk '{print $1}' | grep -v -e "Retrieving" -e "OK" -e "Account")
-do
-    ibmcloud target -c $i
-    ibmcloud account show 
-    TESTE=$(ibmcloud sl call-api SoftLayer_Account getLatestRecurringInvoice | jq '.id')
-    echo $TESTE
-    ibmcloud sl call-api SoftLayer_Billing_Invoice getInvoiceTopLevelItems --init $TESTE --mask 'mask[ id, description, hostName, domainName, oneTimeAfterTaxAmount, recurringAfterTaxAmount, createDate, categoryCode, category[name], location[name] ]' | jq -r '.[] | [.recurringAfterTaxAmount, .categoryCode, .description, .hostName] | @csv' | awk -v FS="," 'BEGIN{print "Cost\tCategory\tDescription\thostName"}{printf "%s\t%s\t%20s\t%s%s", $1, $2, $3, $4, ORS}' | column -s $'\t' -t
-done
+banner(){
+        echo -e " "
+        echo " _____ ____  __  __    _____ _                 _ "
+        echo "|_   _|  _ \|  \/  |  / ____| |               | |"
+        echo "  | | | |_) | \  / | | |    | | ___  _   _  __| |"
+        echo "  | | |  _ <| |\/| | | |    | |/ _ \| | | |/ _' |"
+        echo " _| |_| |_) | |  | | | |____| | (_) | |_| | (_| |"
+        echo "|_____|____/|_|  |_|  \_____|_|\___/ \__,_|\__,_|"
+        echo "                                                 "
+        echo -e " "
+}
+
+usage(){
+banner
+cat << !!
+IBM Cloud - Permissionamento
+versao ${VERSAO}
+SYNTAX
+        Uso: $PROGNAPROGNAME OPCAO
+GENERAL SYNTAX
+        Usage: ${PROGNAME} [-h]
+OPTIONS
+        -poc    Exibe apenas as informações referentes a contas PoC
+		Usage: ${PROGNAME} -poc
+        -h 	Exibe essa ajuda
+!!
+}
+
+
+if [$1 == "-poc"]
+then
+    for i in $(ibmcloud account list |  awk '{print $1}' | grep -v -e "Retrieving" -e "OK" -e "Account")
+    do
+        if $(ibmcloud account show --output 'JSON' | jq '.traits' | jq '.poc') == "true"
+        then
+            ibmcloud target -c $i
+            ibmcloud account show 
+            ibmcloud sl call-api SoftLayer_Account getAllRecurringTopLevelBillingItems  --mask 'mask[ id, description, hostName, domainName, recurringFee, createDate, categoryCode, category[name], location[name] ]' | jq -r '.[] | select(.recurringFee!= "0") | [.recurringFee, .categoryCode, .description, .hostName] | @csv' | awk -v FS="," 'BEGIN{print "Cost\tCategory\tDescription\thostName"}{printf "%s\t%s\t%20s\t%s%s", $1, $2, $3, $4, ORS}' | column -s $'\t' -t
+        fi
+    done
+else
+    if [$1 == "-h"]
+    then
+        usage
+        exit
+    else
+        for i in $(ibmcloud account list |  awk '{print $1}' | grep -v -e "Retrieving" -e "OK" -e "Account")
+        do 
+            ibmcloud target -c $i
+            ibmcloud account show 
+            ibmcloud sl call-api SoftLayer_Account getAllRecurringTopLevelBillingItems  --mask 'mask[ id, description, hostName, domainName, recurringFee, createDate, categoryCode, category[name], location[name] ]' | jq -r '.[] | select(.recurringFee!= "0") | [.recurringFee, .categoryCode, .description, .hostName] | @csv' | awk -v FS="," 'BEGIN{print "Cost\tCategory\tDescription\thostName"}{printf "%s\t%s\t%20s\t%s%s", $1, $2, $3, $4, ORS}' | column -s $'\t' -t
+        done
+    fi
+fi
