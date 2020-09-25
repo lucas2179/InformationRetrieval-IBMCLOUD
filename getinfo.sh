@@ -32,20 +32,22 @@ OPTIONS
 !!
 }
 
+banner
 
-if [$1 == "-poc"]
+if [ $1 == 'poc' ]
 then
     for i in $(ibmcloud account list |  awk '{print $1}' | grep -v -e "Retrieving" -e "OK" -e "Account")
     do
-        if $(ibmcloud account show --output 'JSON' | jq '.traits' | jq '.poc') == "true"
+	    ibmcloud target -c $i
+        if [ $(ibmcloud account show --output 'JSON' | jq '.traits' | jq '.poc') == 'true' ]
         then
-            ibmcloud target -c $i
             ibmcloud account show 
             ibmcloud sl call-api SoftLayer_Account getAllRecurringTopLevelBillingItems  --mask 'mask[ id, description, hostName, domainName, recurringFee, createDate, categoryCode, category[name], location[name] ]' | jq -r '.[] | select(.recurringFee!= "0") | [.recurringFee, .categoryCode, .description, .hostName] | @csv' | awk -v FS="," 'BEGIN{print "Cost\tCategory\tDescription\thostName"}{printf "%s\t%s\t%20s\t%s%s", $1, $2, $3, $4, ORS}' | column -s $'\t' -t
+            ibmcloud sl call-api SoftLayer_Account getNextInvoiceTotalAmount
         fi
     done
 else
-    if [$1 == "-h"]
+    if [ $1 == '-h' ]
     then
         usage
         exit
@@ -55,6 +57,7 @@ else
             ibmcloud target -c $i
             ibmcloud account show 
             ibmcloud sl call-api SoftLayer_Account getAllRecurringTopLevelBillingItems  --mask 'mask[ id, description, hostName, domainName, recurringFee, createDate, categoryCode, category[name], location[name] ]' | jq -r '.[] | select(.recurringFee!= "0") | [.recurringFee, .categoryCode, .description, .hostName] | @csv' | awk -v FS="," 'BEGIN{print "Cost\tCategory\tDescription\thostName"}{printf "%s\t%s\t%20s\t%s%s", $1, $2, $3, $4, ORS}' | column -s $'\t' -t
+            ibmcloud sl call-api SoftLayer_Account getNextInvoiceTotalAmount
         done
     fi
 fi
